@@ -1,6 +1,6 @@
 import { useDraggable } from 'vue-draggable-plus'
 import { useShortcutStore } from '@/shared/shortcut'
-import { ref, ShallowRef } from 'vue'
+import { ref, type ShallowRef } from "vue";
 
 export function useShortcutDrag(
   containerRef: Ref<HTMLElement | undefined | null>,
