@@ -142,8 +142,13 @@ const pinIconClass = perf('shortcut__pin-icon')
     }
   }
 }
+}
+</style>
+<style lang="scss" scoped>
 
-/* 文件夹图标样式 */
+/* (这里是文件原本可能有的其他样式，不用管它) */
+
+/* 下面是你加的文件夹样式 */
 .folder-box {
   width: 64px;
   height: 64px;
@@ -159,6 +164,6 @@ const pinIconClass = perf('shortcut__pin-icon')
     height: 100%;
     border-radius: 4px;
     object-fit: cover;
-  }
-}
+  }  /* 这是结束 mini-icon 的括号 */
+}    /* 🚨 重点：这是结束 folder-box 的括号，你很可能是漏复制了这个！ */
 </style>
