@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { OnLongPress } from '@vueuse/components'
-import { toRef } from 'vue'
+import { toRef, computed } from 'vue'
 
 import Pin12Regular from '~icons/fluent/pin-12-regular'
 
@@ -12,16 +12,18 @@ import { isHasTouchDevice, isTouchEvent } from '@newtab/shared/touch'
 
 const settings = useSettingsStore()
 
+// 1. 在这里新增了 type 和 children，用于支持文件夹
 const props = defineProps<{
-  url: string
+  url?: string
   title: string
   pined?: boolean
   favicon?: string
+  type?: 'link' | 'folder'
+  children?: any[]
   onContextMenu?: (event: MouseEvent | PointerEvent) => void
 }>()
 
-// 使用 Ref 传递 url，让 getFaviconURL 内部监听变化
-const faviconRef = getFaviconURL(toRef(props, 'url'))
+const faviconRef = getFaviconURL(toRef(props, 'url' as any))
 const iconUrl = computed(() => props.favicon || faviconRef.value)
 
 const perf = usePerfClasses(() => ({
@@ -40,8 +42,8 @@ const pinIconClass = perf('shortcut__pin-icon')
       ref="itemRef"
       class="shortcut__item-link"
       tabindex="-1"
-      :href="url"
-      :target="settings.shortcut.openInNewTab ? '_blank' : '_self'"
+      :href="type === 'folder' ? 'javascript:void(0)' : url"
+      :target="settings.shortcut.openInNewTab && type !== 'folder' ? '_blank' : '_self'"
       @contextmenu.stop.prevent="onContextMenu"
       @trigger="
         (e: PointerEvent) => {
@@ -62,7 +64,22 @@ const pinIconClass = perf('shortcut__pin-icon')
             <pin12-regular />
           </el-icon>
         </div>
+
+        <div v-if="type === 'folder'" class="folder-box">
+          <div class="mini-grid">
+            <template v-if="children && children.length > 0">
+              <img 
+                v-for="(child, index) in children.slice(0, 4)" 
+                :key="index" 
+                :src="child.favicon || getFaviconURL(toRef(child, 'url')).value" 
+                class="mini-icon"
+              />
+            </template>
+          </div>
+        </div>
+
         <div
+          v-else
           class="shortcut__icon"
           :class="[iconClass, { border: settings.shortcut.style.border }]"
         >
@@ -73,6 +90,7 @@ const pinIconClass = perf('shortcut__pin-icon')
             }"
           ></span>
         </div>
+
       </div>
       <el-text
         :data-content="title"
@@ -87,83 +105,34 @@ const pinIconClass = perf('shortcut__pin-icon')
   </div>
 </template>
 
-<template>
-  <div class="shortcut-item-wrapper">
-    <div v-if="item.type !== 'folder'" class="icon-box">
-      <img :src="item.favicon" class="icon" />
-    </div>
-
-    <div v-else class="folder-box">
-      <div class="mini-grid">
-        <img 
-          v-for="child in item.children.slice(0, 4)" 
-          :key="child.id" 
-          :src="child.favicon" 
-          class="mini-icon"
-        />
-      </div>
-    </div>
-    <div class="title">{{ item.title }}</div>
-  </div>
-</template>
-
-
 <style lang="scss" scoped>
-/* 顶部标签栏的容器样式 */
-.category-tabs-container {
+.folder-box {
+  width: var(--icon_size);
+  height: var(--icon_size);
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(5px);
+  border-radius: var(--icon_radius);
+  padding: 6px;
   display: flex;
+  align-items: center;
   justify-content: center;
-  gap: 15px;
-  margin-bottom: 25px;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.1); /* 毛玻璃感背景 */
-  backdrop-filter: blur(10px);
-  border-radius: 15px;
-  width: fit-content;
-  margin-inline: auto;
+  box-sizing: border-box;
 
-  .tab-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 16px;
-    cursor: pointer;
-    border-radius: 10px;
-    transition: background 0.3s;
-    color: #fff;
+  .mini-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 4px;
+    width: 100%;
+    height: 100%;
 
-    &:hover {
-      background: rgba(255, 255, 255, 0.15);
-    }
-
-    &.active {
-      background: rgba(255, 255, 255, 0.25);
-      font-weight: bold;
+    .mini-icon {
+      width: 100%;
+      height: 100%;
+      border-radius: 4px;
+      object-fit: cover;
+      background-color: rgba(255,255,255,0.5); /* 占位色 */
     }
   }
 }
-}
-</style>
-<style lang="scss" scoped>
-
-/* (这里是文件原本可能有的其他样式，不用管它) */
-
-/* 下面是你加的文件夹样式 */
-.folder-box {
-  width: 64px;
-  height: 64px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 14px;
-  padding: 6px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-
-  .mini-icon {
-    width: 100%;
-    height: 100%;
-    border-radius: 4px;
-    object-fit: cover;
-  }  /* 这是结束 mini-icon 的括号 */
-}    /* 🚨 重点：这是结束 folder-box 的括号，你很可能是漏复制了这个！ */
 </style>
