@@ -316,7 +316,20 @@ useDraggable(gridRef, shortcuts, {
               <el-icon><settings-round /></el-icon>
             </div>
           </div>
-
+          
+  <!-- 漂亮的Tab UI-->
+          <div class="category-tabs-container">
+  <div 
+    v-for="tab in categories" 
+    :key="tab.id"
+    class="tab-item"
+    :class="{ active: activeCategoryId === tab.id }"
+    @click="activeCategoryId = tab.id"
+  >
+    <div :class="tab.icon"></div>
+    <span>{{ tab.name }}</span>
+  </div>
+</div>
           <!-- 图标网格 -->
           <Transition
             :name="pageDirection === 'backward' ? 'launchpad-page-back' : 'launchpad-page'"
@@ -689,5 +702,42 @@ useDraggable(gridRef, shortcuts, {
 .launchpad-page-back-leave-to {
   opacity: 0;
   transform: translateX(24px);
+}
+
+
+
+  .category-tabs-container {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin-bottom: 30px;
+  padding: 10px 20px;
+  background: rgba(255, 255, 255, 0.1); /* 毛玻璃背景 */
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  width: fit-content;
+  margin-left: auto;
+  margin-right: auto;
+
+  .tab-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.8);
+    border-radius: 12px;
+    transition: all 0.3s ease;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+    &.active {
+      background: rgba(255, 255, 255, 0.3);
+      color: #fff;
+      font-weight: bold;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+  }
 }
 </style>
