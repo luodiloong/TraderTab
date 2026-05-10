@@ -20,9 +20,9 @@ import ShortcutContextMenu from './components/ShortcutContextMenu.vue'
 import { useShortcutData } from './composables/useShortcutData'
 import { useTopSitesMerge } from './composables/useTopSitesMerge'
 
-// Stable Ref map so we don't re-create Refs on every render
 const faviconRefMap = new Map<string, Ref<string>>()
 function getOrCreateFaviconRef(url: string): string {
+  if (!url) return ''
   if (!faviconRefMap.has(url)) {
     faviconRefMap.set(url, getFaviconURL(url))
   }
@@ -30,9 +30,7 @@ function getOrCreateFaviconRef(url: string): string {
 }
 
 const refreshDebounced = useDebounceFn(refresh, 100)
-
 const { topSites, shortcuts, topSitesNeedsReload } = useShortcutData(refreshDebounced)
-
 const model = defineModel<boolean>({ required: true })
 
 const props = defineProps<{
@@ -43,10 +41,18 @@ const props = defineProps<{
 const { t } = useTranslation()
 const settings = useSettingsStore()
 const shortcutStore = useShortcutStore()
-
 const openSettings = inject(OPEN_SETTINGS)
-
 const { width: windowWidth } = useWindowSize({ type: 'visual' })
+
+// ---- 新增：Tab 分类状态 ----
+const categories = ref([
+  { id: 'home', name: '主页', icon: 'i-carbon-home' },
+  { id: 'macro', name: '宏观', icon: 'i-carbon-chart-line' },
+  { id: 'trade', name: '交易', icon: 'i-carbon-finance' },
+  { id: 'news', name: '资讯', icon: 'i-carbon-news' },
+  { id: 'tools', name: '工具', icon: 'i-carbon-tool-box' }
+])
+const activeCategoryId = ref('home')
 
 // ---- 状态 ----
 const query = ref('')
@@ -71,27 +77,27 @@ const ROWS = computed(() => {
 
 const pageSize = computed(() => COLS.value * ROWS.value)
 
+// ---- 新增：分类过滤逻辑 ----
 const allItems = computed(() => {
-  const items: {
-    url: string
-    title: string
-    favicon?: string
-    isPinned: boolean
-    originalIndex: number
-  }[] = []
+  const items: any[] = []
   for (let i = 0; i < shortcuts.value.length; i++) {
     const s = shortcuts.value[i]!
-    items.push({ ...s, isPinned: true, originalIndex: i })
+    const cat = s.categoryId || 'home'
+    if (cat === activeCategoryId.value) {
+      items.push({ ...s, isPinned: true, originalIndex: i })
+    }
   }
-  for (let i = 0; i < topSites.value.length; i++) {
-    const s = topSites.value[i]!
-    items.push({
-      url: s.url,
-      title: s.title || '',
-      favicon: s.favicon,
-      isPinned: false,
-      originalIndex: i,
-    })
+  if (activeCategoryId.value === 'home') {
+    for (let i = 0; i < topSites.value.length; i++) {
+      const s = topSites.value[i]!
+      items.push({
+        url: s.url,
+        title: s.title || '',
+        favicon: s.favicon,
+        isPinned: false,
+        originalIndex: i,
+      })
+    }
   }
   return items
 })
@@ -102,11 +108,10 @@ const filteredItems = computed(() => {
   const q = query.value.trim().toLowerCase()
   if (!q) return allItems.value
   return allItems.value.filter(
-    (item) => item.title.toLowerCase().includes(q) || item.url.toLowerCase().includes(q),
+    (item) => item.title.toLowerCase().includes(q) || (item.url && item.url.toLowerCase().includes(q)),
   )
 })
 
-// 添加按钮占1个槽，纳入分页计算
 const pageCount = computed(() => {
   const total = !isSearching.value ? allItems.value.length + 1 : allItems.value.length
   return Math.max(1, Math.ceil(total / pageSize.value))
@@ -116,47 +121,37 @@ const currentItems = computed(() => {
   if (isSearching.value) return filteredItems.value
   const start = page.value * pageSize.value
   const isLastPage = page.value === pageCount.value - 1
-  // 最后一页留一个槽给添加按钮
   const end = isLastPage && !isSearching.value ? start + pageSize.value - 1 : start + pageSize.value
   return allItems.value.slice(start, end)
 })
 
-// ---- 数据获取 ----
 async function refresh() {
   shortcuts.value = shortcutStore.items.slice()
-
-  // 合并最常访问
   if (settings.dock.launchpad.topSites) {
     topSites.value = await useTopSitesMerge({
       shortcuts: shortcuts.value,
       force: topSitesNeedsReload.value,
-      noCap: true, // 不截断，获取所有可用的 top sites
+      noCap: true,
     })
     topSitesNeedsReload.value = false
-    // topSites.value = sites.map((s) => ({ url: s.url, title: s.title ?? '', favicon: s.favicon }))
   } else {
     topSites.value = []
   }
 }
 
-// ---- 翻页 ----
 const pageDirection = ref<'forward' | 'backward'>('forward')
-
 function prevPage() {
   if (page.value > 0) {
     pageDirection.value = 'backward'
     page.value--
   }
 }
-
 function nextPage() {
   if (page.value < pageCount.value - 1) {
     pageDirection.value = 'forward'
     page.value++
   }
 }
-
-// ---- 关闭 ----
 function close() {
   if (ctxMenuOpen.value) {
     ctxMenuRef.value?.close()
@@ -166,7 +161,6 @@ function close() {
   model.value = false
 }
 
-// ---- 滑动翻页（移动端）----
 useSwipe(containerRef, {
   onSwipeEnd(_e, dir) {
     if (dir === 'left') nextPage()
@@ -174,21 +168,18 @@ useSwipe(containerRef, {
   },
 })
 
-// ---- 键盘 ----
 onKeyStroke('Escape', (e) => {
   if (model.value) {
     e.preventDefault()
     close()
   }
 })
-
 onKeyStroke('ArrowLeft', (e) => {
   if (model.value && !isSearching.value) {
     e.preventDefault()
     prevPage()
   }
 })
-
 onKeyStroke('ArrowRight', (e) => {
   if (model.value && !isSearching.value) {
     e.preventDefault()
@@ -196,7 +187,6 @@ onKeyStroke('ArrowRight', (e) => {
   }
 })
 
-// ---- 打开时重置 & 刷新 ----
 watch(
   model,
   async (v) => {
@@ -211,39 +201,29 @@ watch(
   { immediate: true },
 )
 
-// 搜索时回到第0页
-watch(query, () => {
-  page.value = 0
-})
-
-// 页数变化时确保当前页有效
+watch(query, () => { page.value = 0 })
 watch(pageCount, (count) => {
   if (page.value >= count) page.value = Math.max(0, count - 1)
 })
-
 watch(
   () => settings.dock.launchpad.topSites,
   (enabled) => {
-    if (enabled) {
-      topSitesNeedsReload.value = true
-    }
+    if (enabled) topSitesNeedsReload.value = true
     refreshDebounced()
   },
 )
 
-// ---- 点击打开 ----
-function openItem(url: string) {
+function openItem(url?: string) {
+  if (!url || url === 'javascript:void(0)') return // 文件夹暂不直接跳转
   window.open(url, settings.dock.launchpad.openInNewTab ? '_blank' : '_self')
 }
 
-// ---- 右键菜单 ----
 const perf = usePerfClasses(() => ({
   transparent: settings.perf.shortcut.transparent,
   blur: settings.perf.shortcut.blur,
 }))
 
 const popperClass = perf('shortcut__menu-popper')
-
 const ctxMenuRef = useTemplateRef<InstanceType<typeof ShortcutContextMenu>>('ctxMenuRef')
 const ctxMenuOpen = ref(false)
 
@@ -255,7 +235,7 @@ function openCtxMenu(
   ctxMenuOpen.value = true
 }
 
-// ---- 拖动排序（仅置顶项目）----
+// ---- 新增：拖动合并文件夹核心算法 ----
 const gridRef = useTemplateRef<HTMLElement>('gridRef')
 
 useDraggable(gridRef, shortcuts, {
@@ -266,6 +246,58 @@ useDraggable(gridRef, shortcuts, {
   handle: '.launchpad-item--pined',
   onStart() {
     ctxMenuRef.value?.close()
+  },
+  onEnd(evt: any) {
+    const ev = evt.originalEvent as MouseEvent | TouchEvent;
+    if (!ev) return;
+
+    let clientX, clientY;
+    if (window.TouchEvent && ev instanceof TouchEvent) {
+      clientX = ev.changedTouches[0].clientX;
+      clientY = ev.changedTouches[0].clientY;
+    } else {
+      clientX = (ev as MouseEvent).clientX;
+      clientY = (ev as MouseEvent).clientY;
+    }
+
+    // 悬停探测
+    const draggedEl = evt.item;
+    draggedEl.style.display = 'none';
+    const targetEl = document.elementFromPoint(clientX, clientY);
+    draggedEl.style.display = '';
+
+    const dropTarget = targetEl?.closest('.launchpad-item--pined');
+
+    if (dropTarget && dropTarget !== draggedEl) {
+      const sourceIdx = Number(draggedEl.getAttribute('data-idx'));
+      const targetIdx = Number(dropTarget.getAttribute('data-idx'));
+
+      if (!isNaN(sourceIdx) && !isNaN(targetIdx) && sourceIdx !== targetIdx) {
+        const sourceData = shortcuts.value[sourceIdx];
+        const targetData = shortcuts.value[targetIdx];
+
+        // 合并逻辑
+        if (targetData.type === 'folder') {
+          targetData.children = targetData.children || [];
+          targetData.children.push(sourceData);
+        } else {
+          targetData.type = 'folder';
+          targetData.children = [{ ...targetData }, sourceData];
+          targetData.url = 'javascript:void(0)'; // 转化成文件夹
+        }
+        
+        shortcuts.value.splice(sourceIdx, 1);
+        shortcutStore.items = shortcuts.value;
+        shortcutStore.save();
+        refreshDebounced();
+        return;
+      }
+    }
+    
+    // 如果没有触发合并，执行原本的排序保存
+    shortcutStore.items = shortcuts.value
+    shortcutStore.save()
+    refreshDebounced()
   },
   onUpdate() {
     shortcutStore.items = shortcuts.value
@@ -285,7 +317,6 @@ useDraggable(gridRef, shortcuts, {
           @click.self="close"
           @contextmenu.prevent.stop
         >
-          <!-- 搜索栏 -->
           <div class="launchpad-search">
             <el-input
               ref="searchInput"
@@ -306,7 +337,6 @@ useDraggable(gridRef, shortcuts, {
               </template>
             </el-input>
 
-            <!-- 设置按钮 -->
             <div
               role="button"
               tabindex="0"
@@ -317,20 +347,18 @@ useDraggable(gridRef, shortcuts, {
             </div>
           </div>
           
-  <!-- 漂亮的Tab UI-->
           <div class="category-tabs-container">
-  <div 
-    v-for="tab in categories" 
-    :key="tab.id"
-    class="tab-item"
-    :class="{ active: activeCategoryId === tab.id }"
-    @click="activeCategoryId = tab.id"
-  >
-    <div :class="tab.icon"></div>
-    <span>{{ tab.name }}</span>
-  </div>
-</div>
-          <!-- 图标网格 -->
+            <div 
+              v-for="tab in categories" 
+              :key="tab.id"
+              class="tab-item"
+              :class="{ active: activeCategoryId === tab.id }"
+              @click="activeCategoryId = tab.id"
+            >
+              <span>{{ tab.name }}</span>
+            </div>
+          </div>
+
           <Transition
             :name="pageDirection === 'backward' ? 'launchpad-page-back' : 'launchpad-page'"
             mode="out-in"
@@ -344,7 +372,8 @@ useDraggable(gridRef, shortcuts, {
             >
               <OnLongPress
                 v-for="item in currentItems"
-                :key="item.url"
+                :key="item.originalIndex"
+                :data-idx="item.originalIndex"
                 as="div"
                 class="launchpad-item"
                 :class="{ 'launchpad-item--pined': item.isPinned }"
@@ -356,8 +385,17 @@ useDraggable(gridRef, shortcuts, {
                   }
                 "
               >
-                <div class="launchpad-item__icon">
-                  <img :src="item.favicon || getOrCreateFaviconRef(item.url)" :alt="item.title" />
+                <div class="launchpad-item__icon" :class="{ 'folder-grid': item.type === 'folder' }">
+                  <template v-if="item.type === 'folder' && item.children">
+                    <img 
+                      v-for="(child, idx) in item.children.slice(0, 4)" 
+                      :key="idx" 
+                      :src="child.favicon || getOrCreateFaviconRef(child.url)" 
+                    />
+                  </template>
+                  <template v-else>
+                    <img :src="item.favicon || getOrCreateFaviconRef(item.url)" :alt="item.title" />
+                  </template>
                 </div>
                 <el-text :line-clamp="1" truncated class="launchpad-item__label">
                   <el-icon v-if="item.isPinned && settings.dock.launchpad.topSites">
@@ -366,7 +404,7 @@ useDraggable(gridRef, shortcuts, {
                   {{ item.title }}
                 </el-text>
               </OnLongPress>
-              <!-- 无结果 -->
+              
               <div
                 v-if="currentItems.length === 0 && isSearching"
                 class="launchpad-empty"
@@ -374,7 +412,6 @@ useDraggable(gridRef, shortcuts, {
               >
                 {{ t('dock.launchpad.empty') }}
               </div>
-              <!-- 添加按钮（仅最后一页显示）-->
               <div
                 v-if="!isSearching && page === pageCount - 1"
                 class="launchpad-item"
@@ -390,7 +427,6 @@ useDraggable(gridRef, shortcuts, {
             </div>
           </Transition>
 
-          <!-- 分页控制（非搜索模式，多于1页时显示） -->
           <div v-if="!isSearching && pageCount > 1" class="launchpad-pagination">
             <button class="launchpad-arrow" :disabled="page === 0" @click="prevPage">
               <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
@@ -416,7 +452,6 @@ useDraggable(gridRef, shortcuts, {
       </el-overlay>
     </Transition>
 
-    <!-- 右键菜单 -->
     <shortcut-context-menu
       ref="ctxMenuRef"
       :refresh-fn="refreshDebounced"
@@ -576,6 +611,24 @@ useDraggable(gridRef, shortcuts, {
   }
 }
 
+/* ---- 文件夹合并样式 ---- */
+.folder-grid {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 4px;
+  padding: 6px;
+  background: rgba(255, 255, 255, 0.2);
+  box-sizing: border-box;
+
+  img {
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 4px !important;
+    object-fit: cover !important;
+  }
+}
+
 .launchpad-empty {
   display: flex;
   grid-column: 1 / -1;
@@ -605,9 +658,7 @@ useDraggable(gridRef, shortcuts, {
   cursor: pointer;
   background-color: rgb(255 255 255 / 35%);
   border-radius: 50%;
-  transition:
-    background-color 0.2s ease,
-    transform 0.2s ease;
+  transition: background-color 0.2s ease, transform 0.2s ease;
 
   &:hover {
     background-color: rgb(255 255 255 / 65%);
@@ -632,9 +683,7 @@ useDraggable(gridRef, shortcuts, {
   background: rgb(255 255 255 / 12%);
   border: none;
   border-radius: 50%;
-  transition:
-    background-color 0.15s ease,
-    color 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
 
   &:hover:not(:disabled) {
     color: #fff;
@@ -647,72 +696,34 @@ useDraggable(gridRef, shortcuts, {
   }
 }
 
-/* ---- 入场/离场动画 ---- */
-.launchpad-fade-enter-active,
-.launchpad-fade-leave-active {
-  transition:
-    opacity 0.3s ease,
-    backdrop-filter 0.3s ease;
-
-  .launchpad-wrapper {
-    transition: transform 0.3s ease;
-  }
+.launchpad-fade-enter-active, .launchpad-fade-leave-active {
+  transition: opacity 0.3s ease, backdrop-filter 0.3s ease;
+  .launchpad-wrapper { transition: transform 0.3s ease; }
 }
-
-.launchpad-fade-enter-from,
-.launchpad-fade-leave-to {
+.launchpad-fade-enter-from, .launchpad-fade-leave-to {
   opacity: 0;
-
-  .launchpad-wrapper {
-    transform: scale(1.05);
-  }
+  .launchpad-wrapper { transform: scale(1.05); }
 }
 
-/* ---- 翻页动画（下一页：右→左）---- */
-.launchpad-page-enter-active,
-.launchpad-page-leave-active {
-  transition:
-    opacity 0.18s ease,
-    transform 0.18s ease;
+.launchpad-page-enter-active, .launchpad-page-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
 }
+.launchpad-page-enter-from { opacity: 0; transform: translateX(24px); }
+.launchpad-page-leave-to { opacity: 0; transform: translateX(-24px); }
 
-.launchpad-page-enter-from {
-  opacity: 0;
-  transform: translateX(24px);
+.launchpad-page-back-enter-active, .launchpad-page-back-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
 }
+.launchpad-page-back-enter-from { opacity: 0; transform: translateX(-24px); }
+.launchpad-page-back-leave-to { opacity: 0; transform: translateX(24px); }
 
-.launchpad-page-leave-to {
-  opacity: 0;
-  transform: translateX(-24px);
-}
-
-/* ---- 翻页动画（上一页：左→右）---- */
-.launchpad-page-back-enter-active,
-.launchpad-page-back-leave-active {
-  transition:
-    opacity 0.18s ease,
-    transform 0.18s ease;
-}
-
-.launchpad-page-back-enter-from {
-  opacity: 0;
-  transform: translateX(-24px);
-}
-
-.launchpad-page-back-leave-to {
-  opacity: 0;
-  transform: translateX(24px);
-}
-
-
-
-  .category-tabs-container {
+.category-tabs-container {
   display: flex;
   justify-content: center;
   gap: 20px;
   margin-bottom: 30px;
   padding: 10px 20px;
-  background: rgba(255, 255, 255, 0.1); /* 毛玻璃背景 */
+  background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
   border-radius: 20px;
   width: fit-content;
