@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { OnLongPress } from '@vueuse/components'
 import { onKeyStroke, useDebounceFn, useElementSize, useSwipe, useWindowSize } from '@vueuse/core'
+import { ref, computed, inject, nextTick, watch, useTemplateRef, Ref } from 'vue'
 
 import { useTranslation } from 'i18next-vue'
 import { useDraggable } from 'vue-draggable-plus'
@@ -19,6 +20,18 @@ import { isHasTouchDevice, isTouchEvent } from '@newtab/shared/touch'
 import ShortcutContextMenu from './components/ShortcutContextMenu.vue'
 import { useShortcutData } from './composables/useShortcutData'
 import { useTopSitesMerge } from './composables/useTopSitesMerge'
+
+// 【终极修复】：新增专用的数据接口，让 UI 模板认识这些新属性！
+interface LaunchpadItem {
+  url: string;
+  title: string;
+  favicon?: string;
+  isPinned: boolean;
+  originalIndex: number;
+  type?: string;
+  children?: any[];
+  categoryId?: string;
+}
 
 const faviconRefMap = new Map<string, Ref<string>>()
 function getOrCreateFaviconRef(url: string): string {
@@ -75,21 +88,21 @@ const ROWS = computed(() => {
 
 const pageSize = computed(() => COLS.value * ROWS.value)
 
-const allItems = computed(() => {
-  const items: any[] = []
+// 【修复】：用 LaunchpadItem 严格定义，不再引发报错
+const allItems = computed<LaunchpadItem[]>(() => {
+  const items: LaunchpadItem[] = []
   for (let i = 0; i < shortcuts.value.length; i++) {
-    // 【免检修复】：强制声明为 any
-    const s: any = shortcuts.value[i]! 
+    const s: any = shortcuts.value[i]!
     const cat = s.categoryId || 'home'
     if (cat === activeCategoryId.value) {
-      items.push({ ...s, isPinned: true, originalIndex: i })
+      items.push({ ...s, isPinned: true, originalIndex: i, url: s.url || 'javascript:void(0)' })
     }
   }
   if (activeCategoryId.value === 'home') {
     for (let i = 0; i < topSites.value.length; i++) {
-      const s = topSites.value[i]!
+      const s: any = topSites.value[i]!
       items.push({
-        url: s.url,
+        url: s.url || '',
         title: s.title || '',
         favicon: s.favicon,
         isPinned: false,
@@ -102,7 +115,7 @@ const allItems = computed(() => {
 
 const isSearching = computed(() => query.value.trim().length > 0)
 
-const filteredItems = computed(() => {
+const filteredItems = computed<LaunchpadItem[]>(() => {
   const q = query.value.trim().toLowerCase()
   if (!q) return allItems.value
   return allItems.value.filter(
@@ -115,7 +128,7 @@ const pageCount = computed(() => {
   return Math.max(1, Math.ceil(total / pageSize.value))
 })
 
-const currentItems = computed(() => {
+const currentItems = computed<LaunchpadItem[]>(() => {
   if (isSearching.value) return filteredItems.value
   const start = page.value * pageSize.value
   const isLastPage = page.value === pageCount.value - 1
@@ -227,7 +240,7 @@ const ctxMenuOpen = ref(false)
 
 function openCtxMenu(
   event: MouseEvent | PointerEvent,
-  item: { url: string; title: string; isPinned: boolean; originalIndex: number },
+  item: any,
 ): void {
   ctxMenuRef.value?.open(event, item)
   ctxMenuOpen.value = true
@@ -235,7 +248,8 @@ function openCtxMenu(
 
 const gridRef = useTemplateRef<HTMLElement>('gridRef')
 
-useDraggable(gridRef, shortcuts, {
+// 【修复】：用 as any 强行绕开拖拽组件的类型冲突
+useDraggable(gridRef, shortcuts as any, {
   animation: 150,
   delayOnTouchOnly: true,
   touchStartThreshold: 10,
@@ -269,7 +283,6 @@ useDraggable(gridRef, shortcuts, {
       const targetIdx = Number(dropTarget.getAttribute('data-idx'));
 
       if (!isNaN(sourceIdx) && !isNaN(targetIdx) && sourceIdx !== targetIdx) {
-        // 【免检修复】：强制声明为 any
         const sourceData: any = shortcuts.value[sourceIdx];
         const targetData: any = shortcuts.value[targetIdx];
 
