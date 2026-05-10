@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { OnLongPress } from '@vueuse/components'
 import { onKeyStroke, useDebounceFn, useElementSize, useSwipe, useWindowSize } from '@vueuse/core'
-import { ref, computed, inject, nextTick, watch, useTemplateRef, Ref } from 'vue'
+import { ref, computed, inject, nextTick, watch, useTemplateRef, type Ref } from "vue";
 
 import { useTranslation } from 'i18next-vue'
 import { useDraggable } from 'vue-draggable-plus'
