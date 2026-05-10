@@ -86,3 +86,79 @@ const pinIconClass = perf('shortcut__pin-icon')
     </OnLongPress>
   </div>
 </template>
+
+<template>
+  <div class="shortcut-item-wrapper">
+    <div v-if="item.type !== 'folder'" class="icon-box">
+      <img :src="item.favicon" class="icon" />
+    </div>
+
+    <div v-else class="folder-box">
+      <div class="mini-grid">
+        <img 
+          v-for="child in item.children.slice(0, 4)" 
+          :key="child.id" 
+          :src="child.favicon" 
+          class="mini-icon"
+        />
+      </div>
+    </div>
+    <div class="title">{{ item.title }}</div>
+  </div>
+</template>
+
+
+<style lang="scss" scoped>
+/* 顶部标签栏的容器样式 */
+.category-tabs-container {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  margin-bottom: 25px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.1); /* 毛玻璃感背景 */
+  backdrop-filter: blur(10px);
+  border-radius: 15px;
+  width: fit-content;
+  margin-inline: auto;
+
+  .tab-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    cursor: pointer;
+    border-radius: 10px;
+    transition: background 0.3s;
+    color: #fff;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    &.active {
+      background: rgba(255, 255, 255, 0.25);
+      font-weight: bold;
+    }
+  }
+}
+
+/* 文件夹图标样式 */
+.folder-box {
+  width: 64px;
+  height: 64px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 14px;
+  padding: 6px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+
+  .mini-icon {
+    width: 100%;
+    height: 100%;
+    border-radius: 4px;
+    object-fit: cover;
+  }
+}
+</style>
