@@ -16,7 +16,7 @@ import { removeH1Plugin } from './scripts/mdit-remove-h1'
 
 const baseManifest = {
   name: '__MSG_extension_name__',
-  author: 'Red_lnn<lemon@redlnn.top>',
+  author: 'TraderTab',
   description: '__MSG_extension_description__',
   default_locale: 'en',
   icons: {
